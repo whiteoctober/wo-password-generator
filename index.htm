@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+    <title>Password generator</title>
+    <head>
+        <link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.css">
+        <style>
+            input.password {
+                height: auto;
+                width: 500px;
+                font-size: 29px;
+                margin-right: 6px;
+                margin-bottom: 0;
+            }
+
+            .form-inline .checkbox {
+                padding: 3px;
+            }
+
+            .form-inline .checkbox input[type=checkbox] {
+                float: none;
+                margin: 0 6px 0 6px;
+            }
+
+            .dictionary-information input {
+                margin-right: 4px;
+            }
+
+            .form-group {
+                margin-bottom: 10px;
+            }
+        </style>
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+        <script src="dictionary.js"></script>
+        <script>
+
+            var phraseLength = 4;
+            var minWeight = 2000;
+            var minLength = 4;
+            var maxLength = 8;
+            var attackFrequency = 1000000;
+            var words = [];
+            var longestWord = 0;
+
+            var generateDictionary = function() {
+                minLength = $('.min-length').val();
+                maxLength = $('.max-length').val();
+                minWeight = $('.min-weight').val().replace(/,/g, '');
+                attackFrequency = $('.attack-frequency').val().replace(/,/g, '');
+
+                words = dictionary
+                    .map(function(data) { return {word: data[0], weight: data[1]}; })
+                    .filter(function(data) { return data.weight >= minWeight; })
+                    .filter(function(data) { return data.word.length >= minLength })
+                    .filter(function(data) { return data.word.length <= maxLength });
+
+                longestWord = 0;
+                words.map(function(data) {
+                    longestWord = Math.max(data.word.length, longestWord);
+                });
+
+                $('.dictionary-size .size').text(words.length);
+
+                var dictionaryAttack = Math.pow(words.length, phraseLength);
+                $('.dictionary-attack .combinations').text(dictionaryAttack.toExponential(1));
+                $('.dictionary-attack .time').text(attackLength(dictionaryAttack, attackFrequency));
+
+                var bruteAttack = Math.pow(longestWord * phraseLength + phraseLength - 1, 28);
+                $('.brute-attack .combinations').text(bruteAttack.toExponential(1));
+                $('.brute-attack .time').text(attackLength(bruteAttack, attackFrequency));
+
+                $('.generate').toggleClass('disabled', words.length == 0);
+            };
+
+            var updateForm = function() {
+                $('.min-weight').val(formatNumber(minWeight));
+                $('.attack-frequency').val(formatNumber(attackFrequency));
+            };
+
+            var roundTo = function(number, precision) {
+                var multiplier = Math.pow(10, precision);
+                return Math.round(number * multiplier) / multiplier;
+            };
+
+            var formatNumber = function(number) {
+                return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            };
+
+            var attackLength = function(combinations, attacksPerSecond) {
+                var years = roundTo(combinations / 2 / 31449600 / attacksPerSecond, 2);
+                if (years > 13700000000) years = 'greater than the length of the universe';
+                else years = years+' years';
+                return years+' at '+formatNumber(attacksPerSecond)+' attacks per second';
+            };
+
+            var generatePassword = function() {
+                if (!window.crypto || !window.crypto.getRandomValues) {
+                    return $('.unsupported-error').removeClass('hide');
+                }
+
+                var passwordWords = [];
+                var randomNumbers = window.crypto.getRandomValues(new Uint16Array(phraseLength));
+                var max = Math.pow(2, 16);
+
+                for (i = 0; i < phraseLength; i++) {
+                    passwordWords.push(words[Math.floor(randomNumbers[i] / max * words.length)].word);
+                }
+                var password = passwordWords.join(' ');
+
+                var avoidSpaces = $('.avoid-spaces').prop('checked');
+                $('.password').val(avoidSpaces ? password.replace(/ /g, '-') : password);
+            };
+
+            $(function() {
+                $('.min-length').val(minLength);
+                $('.max-length').val(maxLength);
+                $('.min-weight').val(minWeight);
+                $('.attack-frequency').val(attackFrequency);
+
+                updateForm();
+                generateDictionary();
+                $('.dictionary-information input').bind('input', generateDictionary).blur(updateForm);
+
+                generatePassword();
+                $('.generate').click(generatePassword);
+                $('.password').click(function() {
+                    if (!$(this).hasClass('disabled')) $(this).select();
+                });
+
+                $('.avoid-spaces').click(function() {
+                    var avoid = $('.avoid-spaces').prop('checked');
+                    $('.password').val($('.password').val().replace(/[ -]/g, avoid ? '-' : ' '));
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <div class='container'>
+            <h1>Password generator</h1>
+            <div class="alert alert-error unsupported-error hide">
+                Sorry, <strong>your browser does not support cryptographically secure random numbers</strong>, we can't generate passwords.
+            </div>
+            <div class="well">
+                <form class="form-inline">
+                    <input type='text' class='password'></h2>
+                    <a class='btn btn-primary btn-large generate'>Generate</a>
+                    <label class='checkbox'><input type='checkbox' class='avoid-spaces'></input>Avoid spaces?</label>
+                </form>
+            </div>
+            <form class="form-inline dictionary-information">
+                <div class="form-group">
+                    <h3>Dictionary configuration</h3>
+                    <label>Min word length</label>
+                    <input type='text' name='min-length' class='input-small min-length'>
+                    <label>Max word length</label>
+                    <input type='text' name='max-length' class='input-small max-length'>
+                    <label>Min popularity</label>
+                    <input type='text' name='min-weight' class='input-small min-weight'>
+                </div>
+                <div class="alert alert-info dictionary-size">
+                    Dictionary size:
+                    <span class='size'></span>
+                </div>
+                <h4>Example attack configuration</h4>
+                <label>Attacks per second</label>
+                <input type='text' name='min-weight' class='input-small attack-frequency'>
+            </form>
+
+            <div class="alert alert-info dictionary-attack">
+                <strong>
+                    Dictionary attack combinations:
+                    <span class='combinations'></span>
+                </strong>
+                (<span class='time'></span>)
+            </div>
+            <div class="alert alert-info brute-attack">
+                <strong>
+                    Brute force attack combinations:
+                    <span class='combinations'></span>
+                </strong>
+                (<span class='time'></span>)
+            </div>
+            <p>
+                The dictionary attack length assumes the attacker knows the dictionary and syntax of the password,
+                while the brute force attack assumes the attacker knows the character set of the password.
+            </p>
+        </div>
+    </body>
+</html>
